@@ -39,7 +39,8 @@ void main() {
       repositoryUrl: remote.path,
     );
 
-    await service.connect(creatorConfig);
+    final connected = await service.connect(creatorConfig);
+    expect(connected.localChangedFiles, <String>['mod.txt']);
     await _git(creator.path, <String>['config', 'user.name', 'GitMod Test']);
     await _git(creator.path, <String>[
       'config',
@@ -80,6 +81,193 @@ void main() {
         '${player.path}${Platform.pathSeparator}mod.txt',
       ).readAsString(),
       '第二版',
+    );
+  });
+
+  test('指定仓库内 Mod 子目录时只发布并展示该目录', () async {
+    if (!gitAvailable) markTestSkipped('当前环境未安装 Git。');
+    final root = await Directory.systemTemp.createTemp('gitmod-subdir-');
+    addTearDown(() => root.delete(recursive: true));
+    final remote = Directory('${root.path}${Platform.pathSeparator}remote.git');
+    final creator = Directory('${root.path}${Platform.pathSeparator}creator');
+    final player = Directory('${root.path}${Platform.pathSeparator}player');
+    final modDirectory = Directory(
+      '${creator.path}${Platform.pathSeparator}测试${Platform.pathSeparator}PEAK_mod',
+    );
+    await modDirectory.create(recursive: true);
+    await File(
+      '${modDirectory.path}${Platform.pathSeparator}mod.txt',
+    ).writeAsString('第一版', encoding: utf8);
+    await File(
+      '${creator.path}${Platform.pathSeparator}仅本地.txt',
+    ).writeAsString('不应发布', encoding: utf8);
+    await _git(root.path, <String>['init', '--bare', remote.path]);
+    final service = GitCliModService(timeout: const Duration(seconds: 10));
+    final creatorConfig = ModConfig(
+      role: ModRole.creator,
+      name: '测试 Mod',
+      directoryPath: creator.path,
+      repositoryUrl: remote.path,
+      repositorySubdirectory: '测试/PEAK_mod',
+    );
+
+    final connected = await service.connect(creatorConfig);
+    expect(connected.localChangedFiles, <String>['mod.txt']);
+    await _git(creator.path, <String>['config', 'user.name', 'GitMod Test']);
+    await _git(creator.path, <String>[
+      'config',
+      'user.email',
+      'gitmod@example.test',
+    ]);
+    final initial = await service.publish(creatorConfig, '子目录首次发布');
+    expect(initial.localChangedFiles, isEmpty);
+
+    final playerConfig = ModConfig(
+      role: ModRole.player,
+      name: '测试 Mod',
+      directoryPath: player.path,
+      repositoryUrl: remote.path,
+      repositorySubdirectory: r'测试\PEAK_mod',
+    );
+    await service.connect(playerConfig);
+    expect(
+      await File(
+        '${player.path}${Platform.pathSeparator}测试${Platform.pathSeparator}PEAK_mod${Platform.pathSeparator}mod.txt',
+      ).readAsString(),
+      '第一版',
+    );
+    expect(
+      await File('${player.path}${Platform.pathSeparator}仅本地.txt').exists(),
+      isFalse,
+    );
+
+    await File(
+      '${modDirectory.path}${Platform.pathSeparator}mod.txt',
+    ).writeAsString('第二版', encoding: utf8);
+    await File(
+      '${creator.path}${Platform.pathSeparator}仅本地.txt',
+    ).writeAsString('仍不应发布', encoding: utf8);
+    await service.publish(creatorConfig, '子目录第二版');
+
+    final update = await service.refresh(playerConfig);
+    expect(update.hasUpdates, isTrue);
+    expect(update.remoteUpdateMessage, '子目录第二版');
+    expect(update.pendingUpdateFiles, <String>['mod.txt']);
+    await service.sync(playerConfig);
+    expect(
+      await File(
+        '${player.path}${Platform.pathSeparator}测试${Platform.pathSeparator}PEAK_mod${Platform.pathSeparator}mod.txt',
+      ).readAsString(),
+      '第二版',
+    );
+    expect(
+      await File('${player.path}${Platform.pathSeparator}仅本地.txt').exists(),
+      isFalse,
+    );
+  });
+
+  test('仓库其他目录有远端提交时仍提示可同步但不列出无关文件', () async {
+    if (!gitAvailable) markTestSkipped('当前环境未安装 Git。');
+    final root = await Directory.systemTemp.createTemp('gitmod-subdir-remote-');
+    addTearDown(() => root.delete(recursive: true));
+    final remote = Directory('${root.path}${Platform.pathSeparator}remote.git');
+    final creator = Directory('${root.path}${Platform.pathSeparator}creator');
+    final other = Directory('${root.path}${Platform.pathSeparator}other');
+    final player = Directory('${root.path}${Platform.pathSeparator}player');
+    final modDirectory = Directory(
+      '${creator.path}${Platform.pathSeparator}测试${Platform.pathSeparator}PEAK_mod',
+    );
+    await modDirectory.create(recursive: true);
+    await File(
+      '${modDirectory.path}${Platform.pathSeparator}mod.txt',
+    ).writeAsString('第一版', encoding: utf8);
+    await _git(root.path, <String>['init', '--bare', remote.path]);
+    final service = GitCliModService(timeout: const Duration(seconds: 10));
+    final creatorConfig = ModConfig(
+      role: ModRole.creator,
+      name: '测试 Mod',
+      directoryPath: creator.path,
+      repositoryUrl: remote.path,
+      repositorySubdirectory: '测试/PEAK_mod',
+    );
+    await service.connect(creatorConfig);
+    await _git(creator.path, <String>['config', 'user.name', 'GitMod Test']);
+    await _git(creator.path, <String>[
+      'config',
+      'user.email',
+      'gitmod@example.test',
+    ]);
+    await service.publish(creatorConfig, '子目录首次发布');
+
+    final playerConfig = ModConfig(
+      role: ModRole.player,
+      name: '测试 Mod',
+      directoryPath: player.path,
+      repositoryUrl: remote.path,
+      repositorySubdirectory: '测试/PEAK_mod',
+    );
+    await service.connect(playerConfig);
+    await _git(root.path, <String>['clone', remote.path, other.path]);
+    await _git(other.path, <String>['config', 'user.name', 'Other Test']);
+    await _git(other.path, <String>[
+      'config',
+      'user.email',
+      'other@example.test',
+    ]);
+    await File(
+      '${other.path}${Platform.pathSeparator}仓库说明.txt',
+    ).writeAsString('仅仓库级更新', encoding: utf8);
+    await _git(other.path, <String>['add', '--all']);
+    await _git(other.path, <String>['commit', '-m', '仓库级更新']);
+    await _git(other.path, <String>['push']);
+
+    final update = await service.refresh(playerConfig);
+    expect(update.hasUpdates, isTrue);
+    expect(update.remoteUpdateMessage, '仓库有更新，但当前 Mod 目录没有文件变化');
+    expect(update.pendingUpdateFiles, isEmpty);
+    await service.sync(playerConfig);
+    expect(
+      await File('${player.path}${Platform.pathSeparator}仓库说明.txt').exists(),
+      isTrue,
+    );
+  });
+
+  test('仓库内 Mod 目录路径会拒绝越界和 Git 元数据路径', () async {
+    expect(ModConfig.validateRepositorySubdirectory('测试/PEAK_mod'), isNull);
+    expect(ModConfig.validateRepositorySubdirectory(''), isNull);
+    expect(ModConfig.validateRepositorySubdirectory('/'), isNotNull);
+    expect(ModConfig.validateRepositorySubdirectory('../PEAK_mod'), isNotNull);
+    expect(ModConfig.validateRepositorySubdirectory(r'C:\PEAK_mod'), isNotNull);
+    expect(ModConfig.validateRepositorySubdirectory('.git/config'), isNotNull);
+  });
+
+  test('指定的仓库内 Mod 目录不存在时连接会给出明确提示', () async {
+    if (!gitAvailable) markTestSkipped('当前环境未安装 Git。');
+    final root = await Directory.systemTemp.createTemp(
+      'gitmod-subdir-missing-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final remote = Directory('${root.path}${Platform.pathSeparator}remote.git');
+    final creator = Directory('${root.path}${Platform.pathSeparator}creator');
+    await creator.create();
+    await _git(root.path, <String>['init', '--bare', remote.path]);
+    final config = ModConfig(
+      role: ModRole.creator,
+      name: '测试 Mod',
+      directoryPath: creator.path,
+      repositoryUrl: remote.path,
+      repositorySubdirectory: '测试/不存在',
+    );
+
+    await expectLater(
+      GitCliModService(timeout: const Duration(seconds: 10)).connect(config),
+      throwsA(
+        isA<UserFacingException>().having(
+          (error) => error.message,
+          'message',
+          contains('指定的仓库内 Mod 目录不存在'),
+        ),
+      ),
     );
   });
 
@@ -130,6 +318,128 @@ void main() {
           (error) => error.message,
           'message',
           contains('本地改动'),
+        ),
+      ),
+    );
+  });
+
+  test('玩家同步会保护仓库其他目录的未处理改动', () async {
+    if (!gitAvailable) markTestSkipped('当前环境未安装 Git。');
+    final root = await Directory.systemTemp.createTemp('gitmod-subdir-dirty-');
+    addTearDown(() => root.delete(recursive: true));
+    final remote = Directory('${root.path}${Platform.pathSeparator}remote.git');
+    final creator = Directory('${root.path}${Platform.pathSeparator}creator');
+    final player = Directory('${root.path}${Platform.pathSeparator}player');
+    final creatorMod = Directory(
+      '${creator.path}${Platform.pathSeparator}测试${Platform.pathSeparator}PEAK_mod',
+    );
+    await creatorMod.create(recursive: true);
+    await File(
+      '${creatorMod.path}${Platform.pathSeparator}mod.txt',
+    ).writeAsString('初始', encoding: utf8);
+    await _git(root.path, <String>['init', '--bare', remote.path]);
+    final service = GitCliModService(timeout: const Duration(seconds: 10));
+    final creatorConfig = ModConfig(
+      role: ModRole.creator,
+      name: '测试 Mod',
+      directoryPath: creator.path,
+      repositoryUrl: remote.path,
+      repositorySubdirectory: '测试/PEAK_mod',
+    );
+    await service.connect(creatorConfig);
+    await _git(creator.path, <String>['config', 'user.name', 'GitMod Test']);
+    await _git(creator.path, <String>[
+      'config',
+      'user.email',
+      'gitmod@example.test',
+    ]);
+    await service.publish(creatorConfig, '首次发布');
+
+    final playerConfig = ModConfig(
+      role: ModRole.player,
+      name: '测试 Mod',
+      directoryPath: player.path,
+      repositoryUrl: remote.path,
+      repositorySubdirectory: '测试/PEAK_mod',
+    );
+    await service.connect(playerConfig);
+    await File(
+      '${creatorMod.path}${Platform.pathSeparator}mod.txt',
+    ).writeAsString('远端更新', encoding: utf8);
+    await service.publish(creatorConfig, '发布更新');
+    await File(
+      '${player.path}${Platform.pathSeparator}仓库说明.txt',
+    ).writeAsString('不要覆盖', encoding: utf8);
+
+    await expectLater(
+      service.sync(playerConfig),
+      throwsA(
+        isA<UserFacingException>().having(
+          (error) => error.message,
+          'message',
+          contains('本地改动'),
+        ),
+      ),
+    );
+  });
+
+  test('仓库内 Mod 目录不能代替本地仓库根目录', () async {
+    if (!gitAvailable) markTestSkipped('当前环境未安装 Git。');
+    final root = await Directory.systemTemp.createTemp('gitmod-root-only-');
+    addTearDown(() => root.delete(recursive: true));
+    final remote = Directory('${root.path}${Platform.pathSeparator}remote.git');
+    final creator = Directory('${root.path}${Platform.pathSeparator}creator');
+    final player = Directory('${root.path}${Platform.pathSeparator}player');
+    await creator.create();
+    await File(
+      '${creator.path}${Platform.pathSeparator}mod.txt',
+    ).writeAsString('初始', encoding: utf8);
+    await _git(root.path, <String>['init', '--bare', remote.path]);
+    final service = GitCliModService(timeout: const Duration(seconds: 10));
+    final creatorConfig = ModConfig(
+      role: ModRole.creator,
+      name: '测试 Mod',
+      directoryPath: creator.path,
+      repositoryUrl: remote.path,
+    );
+    await service.connect(creatorConfig);
+    await _git(creator.path, <String>['config', 'user.name', 'GitMod Test']);
+    await _git(creator.path, <String>[
+      'config',
+      'user.email',
+      'gitmod@example.test',
+    ]);
+    await service.publish(creatorConfig, '首次发布');
+    await service.connect(
+      ModConfig(
+        role: ModRole.player,
+        name: '测试 Mod',
+        directoryPath: player.path,
+        repositoryUrl: remote.path,
+      ),
+    );
+    final nestedDirectory = Directory(
+      '${player.path}${Platform.pathSeparator}测试',
+    );
+    await nestedDirectory.create();
+    await File(
+      '${nestedDirectory.path}${Platform.pathSeparator}keep.txt',
+    ).writeAsString('保留为外层仓库子目录', encoding: utf8);
+
+    await expectLater(
+      service.connect(
+        ModConfig(
+          role: ModRole.player,
+          name: '测试 Mod',
+          directoryPath: nestedDirectory.path,
+          repositoryUrl: remote.path,
+        ),
+      ),
+      throwsA(
+        isA<UserFacingException>().having(
+          (error) => error.message,
+          'message',
+          contains('仓库的根目录'),
         ),
       ),
     );
@@ -224,13 +534,21 @@ void main() {
     await _git(root.path, <String>['init', '--bare', remote.path]);
     await _git(source.path, <String>['init']);
     await _git(source.path, <String>['config', 'user.name', 'Tag Test']);
-    await _git(source.path, <String>['config', 'user.email', 'tag@example.test']);
-    await File('${source.path}${Platform.pathSeparator}tagged.txt').writeAsString('tag');
+    await _git(source.path, <String>[
+      'config',
+      'user.email',
+      'tag@example.test',
+    ]);
+    await File(
+      '${source.path}${Platform.pathSeparator}tagged.txt',
+    ).writeAsString('tag');
     await _git(source.path, <String>['add', '--all']);
     await _git(source.path, <String>['commit', '-m', 'tag only']);
     await _git(source.path, <String>['tag', 'v0.1']);
     await _git(source.path, <String>['push', remote.path, 'refs/tags/v0.1']);
-    await File('${creator.path}${Platform.pathSeparator}local.txt').writeAsString('local');
+    await File(
+      '${creator.path}${Platform.pathSeparator}local.txt',
+    ).writeAsString('local');
     final service = GitCliModService(timeout: const Duration(seconds: 10));
     final config = ModConfig(
       role: ModRole.creator,
@@ -261,8 +579,14 @@ void main() {
     await _git(root.path, <String>['init', '--bare', remote.path]);
     await _git(creator.path, <String>['init']);
     await _git(creator.path, <String>['config', 'user.name', 'Branch Test']);
-    await _git(creator.path, <String>['config', 'user.email', 'branch@example.test']);
-    await File('${creator.path}${Platform.pathSeparator}local.txt').writeAsString('local');
+    await _git(creator.path, <String>[
+      'config',
+      'user.email',
+      'branch@example.test',
+    ]);
+    await File(
+      '${creator.path}${Platform.pathSeparator}local.txt',
+    ).writeAsString('local');
     await _git(creator.path, <String>['add', '--all']);
     await _git(creator.path, <String>['commit', '-m', 'local']);
     await _git(creator.path, <String>['remote', 'add', 'origin', remote.path]);
@@ -295,7 +619,9 @@ void main() {
     final checkout = Directory('${root.path}${Platform.pathSeparator}checkout');
     await creator.create();
     await _git(root.path, <String>['init', '--bare', remote.path]);
-    await File('${creator.path}${Platform.pathSeparator}mod.txt').writeAsString('首版');
+    await File(
+      '${creator.path}${Platform.pathSeparator}mod.txt',
+    ).writeAsString('首版');
     final runner = _FailFirstPushRunner();
     final service = GitCliModService(
       runner: runner,
@@ -309,17 +635,31 @@ void main() {
     );
     await service.connect(config);
     await _git(creator.path, <String>['config', 'user.name', 'Retry Test']);
-    await _git(creator.path, <String>['config', 'user.email', 'retry@example.test']);
+    await _git(creator.path, <String>[
+      'config',
+      'user.email',
+      'retry@example.test',
+    ]);
 
     await expectLater(
       service.publish(config, '首次发布'),
       throwsA(isA<UserFacingException>()),
     );
-    expect(await File('${creator.path}${Platform.pathSeparator}mod.txt').readAsString(), '首版');
+    expect(
+      await File(
+        '${creator.path}${Platform.pathSeparator}mod.txt',
+      ).readAsString(),
+      '首版',
+    );
 
     await service.publish(config, '首次发布重试');
     await _git(root.path, <String>['clone', remote.path, checkout.path]);
-    expect(await File('${checkout.path}${Platform.pathSeparator}mod.txt').readAsString(), '首版');
+    expect(
+      await File(
+        '${checkout.path}${Platform.pathSeparator}mod.txt',
+      ).readAsString(),
+      '首版',
+    );
   });
 }
 

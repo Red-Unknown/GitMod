@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as path;
+
 import '../core/command_runner.dart';
 import '../core/user_facing_exception.dart';
 import '../models/mod_config.dart';
@@ -36,7 +38,7 @@ class GitCliModService implements GitModService {
 
     if (config.role == ModRole.creator) {
       if (!await directory.exists()) {
-        throw const UserFacingException('作者目录不存在，请重新选择 Mod 根目录。');
+        throw const UserFacingException('作者目录不存在，请重新选择本地仓库目录。');
       }
       await _ensureCreatorRepository(config);
     } else {
@@ -50,12 +52,12 @@ class GitCliModService implements GitModService {
     _requireComplete(config);
     await _ensureGitAvailable();
     await _requireMatchingRepository(config);
-    final localChangedFiles = await _localChangedFiles(config.directoryPath);
+    final localChangedFiles = await _localChangedFiles(config);
     await _gitRequired(<String>[
       'fetch',
       'origin',
     ], workingDirectory: config.directoryPath);
-    final remoteUpdate = await _remoteUpdate(config.directoryPath);
+    final remoteUpdate = await _remoteUpdate(config);
     return ModSnapshot(
       config: config,
       isConnected: true,
@@ -92,7 +94,7 @@ class GitCliModService implements GitModService {
     if (counts.$2 > 0) {
       throw const UserFacingException('远端已有更新，请先同步本地目录后再发布。');
     }
-    final hasChanges = await _hasLocalChanges(config.directoryPath);
+    final hasChanges = await _hasLocalChanges(config);
     if (!hasChanges && counts.$1 == 0) {
       throw const UserFacingException('没有检测到可发布的 Mod 改动。');
     }
@@ -100,9 +102,15 @@ class GitCliModService implements GitModService {
       await _gitRequired(<String>[
         'add',
         '--all',
+        ..._selectedPathspec(config),
       ], workingDirectory: config.directoryPath);
+      final commitArguments = <String>['commit', '-m', trimmedMessage];
+      if (config.normalizedRepositorySubdirectory.isNotEmpty) {
+        commitArguments.insert(1, '--only');
+        commitArguments.addAll(_selectedPathspec(config));
+      }
       await _gitRequired(
-        <String>['commit', '-m', trimmedMessage],
+        commitArguments,
         workingDirectory: config.directoryPath,
         context: _GitContext.commit,
       );
@@ -122,7 +130,7 @@ class GitCliModService implements GitModService {
       throw const UserFacingException('当前为作者模式，请使用发布更新。');
     }
     await _requireMatchingRepository(config);
-    if (await _hasLocalChanges(config.directoryPath)) {
+    if (await _hasAnyLocalChanges(config.directoryPath)) {
       throw const UserFacingException('检测到本地改动，已停止同步以保护你的文件。请先处理本地改动。');
     }
     await _gitRequired(<String>[
@@ -149,9 +157,12 @@ class GitCliModService implements GitModService {
       '${config.directoryPath}${Platform.pathSeparator}.git',
     );
     if (!await gitDirectory.exists()) {
-      final refs = await _gitRequired(<String>['ls-remote', config.repositoryUrl]);
+      final refs = await _gitRequired(<String>[
+        'ls-remote',
+        config.repositoryUrl,
+      ]);
       if (refs.stdout.trim().isNotEmpty) {
-        throw const UserFacingException('远端已有内容，请先使用已绑定该远端的 Mod 目录。');
+        throw const UserFacingException('远端已有内容，请先选择已绑定该远端的本地仓库目录。');
       }
       await _gitRequired(<String>[
         'init',
@@ -193,14 +204,22 @@ class GitCliModService implements GitModService {
   Future<void> _requireMatchingRepository(ModConfig config) async {
     final directory = Directory(config.directoryPath);
     if (!await directory.exists()) {
-      throw const UserFacingException('Mod 目录不存在，请重新连接。');
+      throw const UserFacingException('本地仓库目录不存在，请重新连接。');
     }
     final repository = await _rawGit(<String>[
       'rev-parse',
       '--is-inside-work-tree',
     ], workingDirectory: config.directoryPath);
     if (repository.exitCode != 0 || repository.stdout.trim() != 'true') {
-      throw const UserFacingException('所选目录不是已连接的 Mod 仓库，请重新连接。');
+      throw const UserFacingException('所选目录不是已连接的本地仓库，请重新连接。');
+    }
+    final repositoryRoot = await _rawGit(<String>[
+      'rev-parse',
+      '--show-toplevel',
+    ], workingDirectory: config.directoryPath);
+    if (repositoryRoot.exitCode != 0 ||
+        !_sameDirectory(repositoryRoot.stdout.trim(), config.directoryPath)) {
+      throw const UserFacingException('请选择 Git 仓库的根目录，而不是仓库内的子文件夹。');
     }
     final remote = await _rawGit(<String>[
       'remote',
@@ -211,18 +230,37 @@ class GitCliModService implements GitModService {
         remote.stdout.trim() != config.repositoryUrl.trim()) {
       throw const UserFacingException('本地仓库与填写的地址不一致，请确认仓库地址。');
     }
+    final selectedDirectory = Directory(_selectedDirectoryPath(config));
+    if (!await selectedDirectory.exists()) {
+      throw const UserFacingException('指定的仓库内 Mod 目录不存在，请检查目录名称。');
+    }
   }
 
-  Future<bool> _hasLocalChanges(String directory) async {
-    return (await _localChangedFiles(directory)).isNotEmpty;
+  Future<bool> _hasLocalChanges(ModConfig config) async {
+    return (await _localChangedFiles(config)).isNotEmpty;
   }
 
-  Future<List<String>> _localChangedFiles(String directory) async {
+  Future<bool> _hasAnyLocalChanges(String directory) async {
     final result = await _gitRequired(<String>[
+      '-c',
+      'core.quotePath=false',
       'status',
       '--porcelain=v1',
       '-z',
     ], workingDirectory: directory);
+    return result.stdout.isNotEmpty;
+  }
+
+  Future<List<String>> _localChangedFiles(ModConfig config) async {
+    final result = await _gitRequired(<String>[
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v1',
+      '-z',
+      '--untracked-files=all',
+      ..._selectedPathspec(config),
+    ], workingDirectory: config.directoryPath);
     final tokens = result.stdout.split('\u0000');
     final paths = <String>[];
     for (var index = 0; index < tokens.length; index++) {
@@ -230,41 +268,49 @@ class GitCliModService implements GitModService {
       if (entry.isEmpty) continue;
       final status = entry.length >= 2 ? entry.substring(0, 2) : '';
       final path = entry.length > 3 ? entry.substring(3) : entry;
-      if (path.isNotEmpty) paths.add(path);
+      if (path.isNotEmpty) paths.add(_relativeSelectedPath(config, path));
       if (status.contains('R') || status.contains('C')) {
         if (index + 1 < tokens.length && tokens[index + 1].isNotEmpty) {
-          paths.add(tokens[++index]);
+          paths.add(_relativeSelectedPath(config, tokens[++index]));
         }
       }
     }
     return paths.toSet().toList(growable: false);
   }
 
-  Future<_RemoteUpdate> _remoteUpdate(String directory) async {
-    final counts = await _aheadBehind(directory);
+  Future<_RemoteUpdate> _remoteUpdate(ModConfig config) async {
+    final counts = await _aheadBehind(config.directoryPath);
     if (counts.$2 == 0) return const _RemoteUpdate.none();
-    final comparisonRef = await _comparisonRef(directory);
+    final comparisonRef = await _comparisonRef(config.directoryPath);
     if (comparisonRef == null) return const _RemoteUpdate.none();
     final message = await _gitRequired(<String>[
       'log',
       '-1',
       '--format=%s',
       'HEAD..$comparisonRef',
-    ], workingDirectory: directory);
+      ..._selectedPathspec(config),
+    ], workingDirectory: config.directoryPath);
     final files = await _gitRequired(<String>[
+      '-c',
+      'core.quotePath=false',
       'diff',
       '--name-only',
       'HEAD..$comparisonRef',
-    ], workingDirectory: directory);
+      ..._selectedPathspec(config),
+    ], workingDirectory: config.directoryPath);
+    final changedFiles = files.stdout
+        .split('\n')
+        .map((file) => file.trim())
+        .where((file) => file.isNotEmpty)
+        .map((file) => _relativeSelectedPath(config, file))
+        .toList(growable: false);
     return _RemoteUpdate(
-      message: message.stdout.trim().isEmpty
+      message: changedFiles.isEmpty
+          ? '仓库有更新，但当前 Mod 目录没有文件变化'
+          : message.stdout.trim().isEmpty
           ? '远端有新的 Mod 更新'
           : message.stdout.trim(),
-      changedFiles: files.stdout
-          .split('\n')
-          .map((path) => path.trim())
-          .where((path) => path.isNotEmpty)
-          .toList(growable: false),
+      changedFiles: changedFiles,
     );
   }
 
@@ -278,10 +324,11 @@ class GitCliModService implements GitModService {
   }
 
   Future<bool> _hasHead(String directory) async {
-    final result = await _rawGit(
-      <String>['rev-parse', '--verify', 'HEAD'],
-      workingDirectory: directory,
-    );
+    final result = await _rawGit(<String>[
+      'rev-parse',
+      '--verify',
+      'HEAD',
+    ], workingDirectory: directory);
     return result.exitCode == 0 && result.stdout.trim().isNotEmpty;
   }
 
@@ -371,6 +418,44 @@ class GitCliModService implements GitModService {
     if (!config.isComplete) {
       throw const UserFacingException('请填写 Mod 名称、目录和仓库地址后再继续。');
     }
+    final error = config.repositorySubdirectoryError;
+    if (error != null) throw UserFacingException(error);
+  }
+
+  String _selectedDirectoryPath(ModConfig config) {
+    final subdirectory = config.normalizedRepositorySubdirectory;
+    if (subdirectory.isEmpty) return config.directoryPath;
+    return path.joinAll(<String>[
+      config.directoryPath,
+      ...subdirectory.split('/'),
+    ]);
+  }
+
+  List<String> _selectedPathspec(ModConfig config) {
+    final subdirectory = config.normalizedRepositorySubdirectory;
+    if (subdirectory.isEmpty) return const <String>[];
+    return <String>['--', subdirectory];
+  }
+
+  String _relativeSelectedPath(ModConfig config, String value) {
+    final normalized = value.replaceAll('\\', '/');
+    final subdirectory = config.normalizedRepositorySubdirectory;
+    if (subdirectory.isEmpty) return normalized;
+    if (normalized == subdirectory) return '';
+    final prefix = '$subdirectory/';
+    if (normalized.startsWith(prefix)) {
+      return normalized.substring(prefix.length);
+    }
+    return normalized;
+  }
+
+  bool _sameDirectory(String first, String second) {
+    final normalizedFirst = path.normalize(path.absolute(first));
+    final normalizedSecond = path.normalize(path.absolute(second));
+    if (Platform.isWindows) {
+      return normalizedFirst.toLowerCase() == normalizedSecond.toLowerCase();
+    }
+    return normalizedFirst == normalizedSecond;
   }
 
   Future<CommandResult> _gitRequired(

@@ -12,9 +12,7 @@ class FilePickerDirectoryPicker implements DirectoryPicker {
   @override
   Future<String?> pickDirectory() async {
     try {
-      return await FilePicker.getDirectoryPath(
-        dialogTitle: '选择 Mod 目录',
-      );
+      return await FilePicker.getDirectoryPath(dialogTitle: '选择本地仓库目录');
     } catch (_) {
       throw const UserFacingException('无法打开目录选择窗口，请重试。');
     }

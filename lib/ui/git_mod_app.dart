@@ -64,25 +64,45 @@ class _GitModWorkbenchState extends State<GitModWorkbench> {
               body: SafeArea(
                 child: Column(
                   children: [
-                    if (compact) _CompactHeader(onOpenConnection: () => setState(() => _pageIndex = 1)),
+                    if (compact)
+                      _CompactHeader(
+                        onOpenConnection: () => setState(() => _pageIndex = 1),
+                      ),
                     Expanded(
                       child: Row(
                         children: [
                           if (!compact)
                             AppSidebar(
-                              title: controller.role == ModRole.creator ? '作者工作台' : '玩家工作台',
+                              title: controller.role == ModRole.creator
+                                  ? '作者工作台'
+                                  : '玩家工作台',
                               items: const [
-                                AppSidebarItem(label: '我的 Mod', icon: Icons.videogame_asset_outlined),
-                                AppSidebarItem(label: '仓库连接', icon: Icons.hub_outlined),
-                                AppSidebarItem(label: '活动记录', icon: Icons.history_outlined),
-                                AppSidebarItem(label: '设置', icon: Icons.settings_outlined),
+                                AppSidebarItem(
+                                  label: '我的 Mod',
+                                  icon: Icons.videogame_asset_outlined,
+                                ),
+                                AppSidebarItem(
+                                  label: '仓库连接',
+                                  icon: Icons.hub_outlined,
+                                ),
+                                AppSidebarItem(
+                                  label: '活动记录',
+                                  icon: Icons.history_outlined,
+                                ),
+                                AppSidebarItem(
+                                  label: '设置',
+                                  icon: Icons.settings_outlined,
+                                ),
                               ],
                               selectedIndex: _pageIndex,
-                              onSelected: (value) => setState(() => _pageIndex = value),
+                              onSelected: (value) =>
+                                  setState(() => _pageIndex = value),
                             ),
                           Expanded(
                             child: ListView(
-                              padding: EdgeInsets.all(compact ? AppSpace.md : AppSpace.lg),
+                              padding: EdgeInsets.all(
+                                compact ? AppSpace.md : AppSpace.lg,
+                              ),
                               children: [
                                 if (controller.busy) ...[
                                   AppProgressPanel(
@@ -101,12 +121,25 @@ class _GitModWorkbenchState extends State<GitModWorkbench> {
                     if (compact)
                       NavigationBar(
                         selectedIndex: _pageIndex,
-                        onDestinationSelected: (value) => setState(() => _pageIndex = value),
+                        onDestinationSelected: (value) =>
+                            setState(() => _pageIndex = value),
                         destinations: const [
-                          NavigationDestination(icon: Icon(Icons.videogame_asset_outlined), label: '我的 Mod'),
-                          NavigationDestination(icon: Icon(Icons.hub_outlined), label: '连接'),
-                          NavigationDestination(icon: Icon(Icons.history_outlined), label: '记录'),
-                          NavigationDestination(icon: Icon(Icons.settings_outlined), label: '设置'),
+                          NavigationDestination(
+                            icon: Icon(Icons.videogame_asset_outlined),
+                            label: '我的 Mod',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.hub_outlined),
+                            label: '连接',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.history_outlined),
+                            label: '记录',
+                          ),
+                          NavigationDestination(
+                            icon: Icon(Icons.settings_outlined),
+                            label: '设置',
+                          ),
                         ],
                       ),
                   ],
@@ -125,9 +158,9 @@ class _GitModWorkbenchState extends State<GitModWorkbench> {
     }
     return switch (_pageIndex) {
       0 => _DashboardPage(
-          controller: controller,
-          publishMessageController: _publishMessageController,
-        ),
+        controller: controller,
+        publishMessageController: _publishMessageController,
+      ),
       2 => _ActivityPage(controller: controller),
       _ => _SettingsPage(controller: controller),
     };
@@ -142,7 +175,12 @@ class _CompactHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.sm, AppSpace.md, 0),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.md,
+        AppSpace.sm,
+        AppSpace.md,
+        0,
+      ),
       child: Row(
         children: [
           const Icon(Icons.sports_esports, color: AppColors.primary),
@@ -194,9 +232,11 @@ class _ConnectionPage extends StatefulWidget {
 class _ConnectionPageState extends State<_ConnectionPage> {
   late final TextEditingController _nameController;
   late final TextEditingController _repositoryController;
+  late final TextEditingController _repositorySubdirectoryController;
   late final TextEditingController _directoryController;
   late String _lastName;
   late String _lastRepository;
+  late String _lastRepositorySubdirectory;
   late String _lastDirectory;
 
   GitModController get controller => widget.controller;
@@ -206,9 +246,13 @@ class _ConnectionPageState extends State<_ConnectionPage> {
     super.initState();
     _lastName = controller.name;
     _lastRepository = controller.repositoryUrl;
+    _lastRepositorySubdirectory = controller.repositorySubdirectory;
     _lastDirectory = controller.directory;
     _nameController = TextEditingController(text: _lastName);
     _repositoryController = TextEditingController(text: _lastRepository);
+    _repositorySubdirectoryController = TextEditingController(
+      text: _lastRepositorySubdirectory,
+    );
     _directoryController = TextEditingController(text: _lastDirectory);
   }
 
@@ -216,14 +260,36 @@ class _ConnectionPageState extends State<_ConnectionPage> {
   void dispose() {
     _nameController.dispose();
     _repositoryController.dispose();
+    _repositorySubdirectoryController.dispose();
     _directoryController.dispose();
     super.dispose();
   }
 
   void _syncFields() {
-    _syncField(_nameController, _lastName, controller.name, (value) => _lastName = value);
-    _syncField(_repositoryController, _lastRepository, controller.repositoryUrl, (value) => _lastRepository = value);
-    _syncField(_directoryController, _lastDirectory, controller.directory, (value) => _lastDirectory = value);
+    _syncField(
+      _nameController,
+      _lastName,
+      controller.name,
+      (value) => _lastName = value,
+    );
+    _syncField(
+      _repositoryController,
+      _lastRepository,
+      controller.repositoryUrl,
+      (value) => _lastRepository = value,
+    );
+    _syncField(
+      _repositorySubdirectoryController,
+      _lastRepositorySubdirectory,
+      controller.repositorySubdirectory,
+      (value) => _lastRepositorySubdirectory = value,
+    );
+    _syncField(
+      _directoryController,
+      _lastDirectory,
+      controller.directory,
+      (value) => _lastDirectory = value,
+    );
   }
 
   void _syncField(
@@ -246,6 +312,7 @@ class _ConnectionPageState extends State<_ConnectionPage> {
     await controller.setRole(role);
     await controller.setName('');
     await controller.setRepositoryUrl('');
+    await controller.setRepositorySubdirectory('');
     await controller.setDirectory('');
   }
 
@@ -255,7 +322,7 @@ class _ConnectionPageState extends State<_ConnectionPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _PageTitle(title: '连接仓库', description: '连接本地 Mod 目录和已有仓库。'),
+        const _PageTitle(title: '连接仓库', description: '连接本地仓库目录和已有仓库。'),
         AppInfoPanel(
           title: '使用方式',
           child: Wrap(
@@ -265,12 +332,16 @@ class _ConnectionPageState extends State<_ConnectionPage> {
               ChoiceChip(
                 label: const Text('我是作者'),
                 selected: controller.role == ModRole.creator,
-                onSelected: controller.busy ? null : (_) => _selectRole(ModRole.creator),
+                onSelected: controller.busy
+                    ? null
+                    : (_) => _selectRole(ModRole.creator),
               ),
               ChoiceChip(
                 label: const Text('我是玩家'),
                 selected: controller.role == ModRole.player,
-                onSelected: controller.busy ? null : (_) => _selectRole(ModRole.player),
+                onSelected: controller.busy
+                    ? null
+                    : (_) => _selectRole(ModRole.player),
               ),
             ],
           ),
@@ -303,15 +374,31 @@ class _ConnectionPageState extends State<_ConnectionPage> {
                     _lastRepository = value;
                     controller.setRepositoryUrl(value);
                   },
-                  decoration: const InputDecoration(hintText: 'https://github.com/用户名/mod.git'),
+                  decoration: const InputDecoration(
+                    hintText: 'https://github.com/用户名/mod.git',
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpace.md),
               AppFieldRow(
-                label: 'Mod 目录',
+                label: '仓库内 Mod 目录（可选）',
+                helper: '例如：测试/PEAK_mod；留空会同步整个仓库。',
+                child: TextFormField(
+                  controller: _repositorySubdirectoryController,
+                  enabled: !controller.busy,
+                  onChanged: (value) {
+                    _lastRepositorySubdirectory = value;
+                    controller.setRepositorySubdirectory(value);
+                  },
+                  decoration: const InputDecoration(hintText: '测试/PEAK_mod'),
+                ),
+              ),
+              const SizedBox(height: AppSpace.md),
+              AppFieldRow(
+                label: '本地仓库目录',
                 helper: controller.role == ModRole.creator
-                    ? '请选择作者本地的完整 Mod 根目录。'
-                    : '请选择空目录或不存在的独立 Mod 安装目录。',
+                    ? '请选择作者本地的仓库根目录。'
+                    : '请选择空目录或不存在的本地仓库目录，应用会保留仓库层级。',
                 child: Row(
                   children: [
                     Expanded(
@@ -322,13 +409,17 @@ class _ConnectionPageState extends State<_ConnectionPage> {
                           _lastDirectory = value;
                           controller.setDirectory(value);
                         },
-                        decoration: const InputDecoration(hintText: 'D:\\Games\\Example\\Mods'),
+                        decoration: const InputDecoration(
+                          hintText: 'D:\\Games\\Example\\Repository',
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppSpace.xs),
                     IconButton(
-                      tooltip: '选择 Mod 目录',
-                      onPressed: controller.busy ? null : controller.pickDirectory,
+                      tooltip: '选择本地仓库目录',
+                      onPressed: controller.busy
+                          ? null
+                          : controller.pickDirectory,
                       icon: const Icon(Icons.folder_open_outlined),
                     ),
                   ],
@@ -357,7 +448,10 @@ class _ConnectionPageState extends State<_ConnectionPage> {
 }
 
 class _DashboardPage extends StatelessWidget {
-  const _DashboardPage({required this.controller, required this.publishMessageController});
+  const _DashboardPage({
+    required this.controller,
+    required this.publishMessageController,
+  });
 
   final GitModController controller;
   final TextEditingController publishMessageController;
@@ -373,7 +467,9 @@ class _DashboardPage extends StatelessWidget {
           AppFeedbackPanel(
             title: controller.error == null ? '尚未连接 Mod 仓库' : '当前无法继续',
             message: controller.status,
-            tone: controller.error == null ? AppFeedbackTone.empty : AppFeedbackTone.error,
+            tone: controller.error == null
+                ? AppFeedbackTone.empty
+                : AppFeedbackTone.error,
             actionLabel: controller.error == null ? '连接仓库' : '重试',
             onAction: controller.error == null ? null : controller.retry,
           ),
@@ -383,12 +479,17 @@ class _DashboardPage extends StatelessWidget {
     final statusTone = controller.error != null
         ? AppStatusTone.error
         : snapshot.hasLocalChanges || snapshot.hasUpdates
-            ? AppStatusTone.warning
-            : AppStatusTone.success;
+        ? AppStatusTone.warning
+        : AppStatusTone.success;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PageTitle(title: controller.name, description: controller.role == ModRole.creator ? '发布 Mod 更新给玩家。' : '同步作者发布的 Mod 更新。'),
+        _PageTitle(
+          title: controller.name,
+          description: controller.role == ModRole.creator
+              ? '发布 Mod 更新给玩家。'
+              : '同步作者发布的 Mod 更新。',
+        ),
         AppInfoPanel(
           title: '当前状态',
           trailing: AppStatusBadge(label: controller.status, tone: statusTone),
@@ -397,15 +498,26 @@ class _DashboardPage extends StatelessWidget {
             children: [
               Text('当前内容', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: AppSpace.xs),
-              Text(snapshot.localVersion, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                snapshot.localVersion,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               const SizedBox(height: AppSpace.sm),
-              Text(controller.directory, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                controller.modDirectory,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
           ),
         ),
         const SizedBox(height: AppSpace.md),
         if (controller.role == ModRole.creator)
-          _CreatorActions(controller: controller, messageController: publishMessageController)
+          _CreatorActions(
+            controller: controller,
+            messageController: publishMessageController,
+          )
         else
           _PlayerActions(controller: controller),
         if (controller.error != null) ...[
@@ -418,7 +530,10 @@ class _DashboardPage extends StatelessWidget {
 }
 
 class _CreatorActions extends StatelessWidget {
-  const _CreatorActions({required this.controller, required this.messageController});
+  const _CreatorActions({
+    required this.controller,
+    required this.messageController,
+  });
 
   final GitModController controller;
   final TextEditingController messageController;
@@ -432,7 +547,9 @@ class _CreatorActions extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            snapshot.hasLocalChanges ? '检测到 ${snapshot.changedFileCount} 个本地改动。' : '目前没有待发布的文件改动。',
+            snapshot.hasLocalChanges
+                ? '检测到 ${snapshot.changedFileCount} 个本地改动。'
+                : '目前没有待发布的文件改动。',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           if (snapshot.hasLocalChanges) ...[
@@ -443,7 +560,10 @@ class _CreatorActions extends StatelessWidget {
               controller: messageController,
               enabled: !controller.busy,
               maxLength: 120,
-              decoration: const InputDecoration(labelText: '本次更新说明', hintText: '例如：修复 Boss 阶段异常'),
+              decoration: const InputDecoration(
+                labelText: '本次更新说明',
+                hintText: '例如：修复 Boss 阶段异常',
+              ),
             ),
             const SizedBox(height: AppSpace.sm),
             Align(
@@ -452,7 +572,9 @@ class _CreatorActions extends StatelessWidget {
                 label: '发布更新',
                 icon: Icons.publish_outlined,
                 isLoading: controller.busy,
-                onPressed: controller.busy ? null : () => controller.publish(messageController.text),
+                onPressed: controller.busy
+                    ? null
+                    : () => controller.publish(messageController.text),
               ),
             ),
           ] else
@@ -491,7 +613,10 @@ class _PlayerActions extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(snapshot.remoteUpdateMessage ?? '作者发布了新的 Mod 内容。', style: Theme.of(context).textTheme.bodyMedium),
+            Text(
+              snapshot.remoteUpdateMessage ?? '作者发布了新的 Mod 内容。',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             const SizedBox(height: AppSpace.sm),
             _FileList(files: snapshot.pendingUpdateFiles),
             const SizedBox(height: AppSpace.md),
@@ -525,7 +650,9 @@ class _FileList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (files.isEmpty) return Text('没有可显示的文件。', style: Theme.of(context).textTheme.bodySmall);
+    if (files.isEmpty) {
+      return Text('没有可显示的文件。', style: Theme.of(context).textTheme.bodySmall);
+    }
     return ConstrainedBox(
       constraints: const BoxConstraints(maxHeight: 152),
       child: ListView.builder(
@@ -533,7 +660,12 @@ class _FileList extends StatelessWidget {
         itemCount: files.length,
         itemBuilder: (context, index) => Padding(
           padding: const EdgeInsets.only(bottom: AppSpace.xxs),
-          child: Text(files[index], maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+          child: Text(
+            files[index],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
       ),
     );
@@ -564,7 +696,9 @@ class _ActivityPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entries = controller.activity.map(_activityEntry).toList(growable: false);
+    final entries = controller.activity
+        .map(_activityEntry)
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -579,7 +713,8 @@ class _ActivityPage extends StatelessWidget {
     return AppActivityEntry(
       title: item.title,
       detail: item.detail,
-      time: '${time.month}月${time.day}日 ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+      time:
+          '${time.month}月${time.day}日 ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
       tone: item.success ? AppStatusTone.success : AppStatusTone.error,
     );
   }
@@ -601,7 +736,30 @@ class _SettingsPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(controller.repositoryUrl.isEmpty ? '尚未连接仓库' : controller.repositoryUrl, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                controller.repositoryUrl.isEmpty
+                    ? '尚未连接仓库'
+                    : controller.repositoryUrl,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                controller.repositorySubdirectory.isEmpty
+                    ? '仓库内 Mod 目录：整个仓库'
+                    : '仓库内 Mod 目录：${controller.repositorySubdirectory}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpace.xs),
+              Text(
+                '本地仓库目录：${controller.directory.isEmpty ? '尚未选择' : controller.directory}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               const SizedBox(height: AppSpace.lg),
               AppActionButton(
                 label: '清除当前连接',

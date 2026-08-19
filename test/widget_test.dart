@@ -8,6 +8,7 @@ import 'package:gitmod/models/mod_config.dart';
 import 'package:gitmod/models/mod_snapshot.dart';
 import 'package:gitmod/services/app_config_store.dart';
 import 'package:gitmod/services/git_mod_service.dart';
+import 'package:gitmod/ui/design_lab_page.dart';
 import 'package:gitmod/ui/git_mod_app.dart';
 
 void main() {
@@ -17,6 +18,8 @@ void main() {
 
     expect(find.text('连接仓库'), findsOneWidget);
     expect(find.text('连接并初始化'), findsOneWidget);
+    expect(find.text('仓库内 Mod 目录（可选）'), findsOneWidget);
+    expect(find.text('例如：测试/PEAK_mod；留空会同步整个仓库。'), findsOneWidget);
     await tester.tap(find.text('我是作者'));
     await tester.pump();
     expect(controller.role, ModRole.creator);
@@ -36,12 +39,39 @@ void main() {
     expect(find.text('管理当前设备上的 Mod 连接信息。'), findsOneWidget);
   });
 
+  testWidgets('连接后显示仓库内 Mod 的实际路径和设置摘要', (tester) async {
+    final controller = _controller();
+    await controller.setName('测试 Mod');
+    await controller.setDirectory(r'C:\Mods\Repository');
+    await controller.setRepositoryUrl('https://example.com/mod.git');
+    await controller.setRepositorySubdirectory('测试/PEAK_mod');
+    await controller.connect();
+    await tester.pumpWidget(GitModApp(controller: controller));
+
+    expect(find.text(r'C:\Mods\Repository\测试\PEAK_mod'), findsOneWidget);
+
+    await tester.tap(find.text('设置'));
+    await tester.pump();
+    expect(find.text('仓库内 Mod 目录：测试/PEAK_mod'), findsOneWidget);
+    expect(find.text(r'本地仓库目录：C:\Mods\Repository'), findsOneWidget);
+  });
+
+  testWidgets('Design Lab 展示仓库内 Mod 目录字段', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: DesignLabPage()));
+
+    expect(find.text('仓库内 Mod 目录（可选）'), findsOneWidget);
+    expect(find.text('例如：测试/PEAK_mod；留空会同步整个仓库。'), findsOneWidget);
+    expect(find.text('本地仓库目录'), findsOneWidget);
+  });
+
   testWidgets('连接失败显示中文原因并提供重试', (tester) async {
     final controller = _controller(failConnect: true);
     await controller.setName('测试 Mod');
     await controller.setDirectory(r'C:\Mods\Test');
     await controller.setRepositoryUrl('https://example.com/mod.git');
     await tester.pumpWidget(GitModApp(controller: controller));
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pump();
     await tester.tap(find.text('连接并初始化'));
     await tester.pumpAndSettle();
 
@@ -57,7 +87,8 @@ void main() {
     final fields = find.byType(TextFormField);
     await tester.enterText(fields.at(0), '旧 Mod');
     await tester.enterText(fields.at(1), 'https://example.com/old.git');
-    await tester.enterText(fields.at(2), r'C:\Mods\Old');
+    await tester.enterText(fields.at(2), r'测试\PEAK_mod');
+    await tester.enterText(fields.at(3), r'C:\Mods\Old');
     await tester.pump();
 
     await tester.tap(find.text('我是作者'));
@@ -65,6 +96,7 @@ void main() {
     expect(controller.role, ModRole.creator);
     expect(controller.name, isEmpty);
     expect(controller.repositoryUrl, isEmpty);
+    expect(controller.repositorySubdirectory, isEmpty);
     expect(controller.directory, isEmpty);
     expect(find.text('旧 Mod'), findsNothing);
 
@@ -75,6 +107,7 @@ void main() {
     expect(find.text('待清除 Mod'), findsNothing);
     expect(controller.name, isEmpty);
     expect(controller.repositoryUrl, isEmpty);
+    expect(controller.repositorySubdirectory, isEmpty);
     expect(controller.directory, isEmpty);
   });
 }
@@ -113,15 +146,15 @@ class _FakeService implements GitModService {
   final bool failConnect;
 
   ModSnapshot _snapshot(ModConfig config) => ModSnapshot(
-        config: config,
-        isConnected: true,
-        hasUpdates: false,
-        hasLocalChanges: true,
-        localVersion: '尚未发布',
-        remoteUpdateMessage: null,
-        pendingUpdateFiles: const <String>[],
-        localChangedFiles: const <String>['plugins/example.dll'],
-      );
+    config: config,
+    isConnected: true,
+    hasUpdates: false,
+    hasLocalChanges: true,
+    localVersion: '尚未发布',
+    remoteUpdateMessage: null,
+    pendingUpdateFiles: const <String>[],
+    localChangedFiles: const <String>['plugins/example.dll'],
+  );
 
   @override
   Future<ModSnapshot> connect(ModConfig config) async {
@@ -135,7 +168,8 @@ class _FakeService implements GitModService {
   Future<ModSnapshot> refresh(ModConfig config) async => _snapshot(config);
 
   @override
-  Future<ModSnapshot> publish(ModConfig config, String message) async => _snapshot(config);
+  Future<ModSnapshot> publish(ModConfig config, String message) async =>
+      _snapshot(config);
 
   @override
   Future<ModSnapshot> sync(ModConfig config) async => _snapshot(config);

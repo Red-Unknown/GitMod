@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as path;
 
 import '../core/directory_picker.dart';
 import '../core/user_facing_exception.dart';
@@ -37,6 +38,13 @@ class GitModController extends ChangeNotifier {
   String get name => _config.name;
   String get directory => _config.directoryPath;
   String get repositoryUrl => _config.repositoryUrl;
+  String get repositorySubdirectory => _config.repositorySubdirectory;
+  String get modDirectory {
+    final subdirectory = _config.normalizedRepositorySubdirectory;
+    if (subdirectory.isEmpty) return _config.directoryPath;
+    return path.normalize(path.join(_config.directoryPath, subdirectory));
+  }
+
   bool get busy => _busy;
   String get status => _status;
   String? get error => _error;
@@ -72,6 +80,11 @@ class GitModController extends ChangeNotifier {
 
   Future<void> setRepositoryUrl(String repositoryUrl) =>
       _setConfig(_config.copyWith(repositoryUrl: repositoryUrl));
+
+  Future<void> setRepositorySubdirectory(String repositorySubdirectory) =>
+      _setConfig(
+        _config.copyWith(repositorySubdirectory: repositorySubdirectory),
+      );
 
   Future<void> pickDirectory() async {
     if (_busy) return;

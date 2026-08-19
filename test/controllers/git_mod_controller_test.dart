@@ -42,12 +42,19 @@ void main() {
     );
     await controller.setRole(ModRole.creator);
     await controller.setName('发布用 Mod');
+    await controller.setDirectory(r'C:\Mods\Repository');
+    await controller.setRepositorySubdirectory(r'测试\PEAK_mod');
     expect(store.value!.role, ModRole.creator);
     expect(store.value!.name, '发布用 Mod');
+    expect(store.value!.repositorySubdirectory, r'测试\PEAK_mod');
+    expect(controller.repositorySubdirectory, r'测试\PEAK_mod');
+    expect(controller.modDirectory, r'C:\Mods\Repository\测试\PEAK_mod');
 
     await controller.reset();
     expect(store.value, isNull);
     expect(controller.name, isEmpty);
+    expect(controller.repositorySubdirectory, isEmpty);
+    expect(controller.modDirectory, isEmpty);
   });
 
   test('发布说明为空会被拒绝，发布结束后阶段复位', () async {

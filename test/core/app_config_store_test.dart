@@ -18,6 +18,7 @@ void main() {
       name: '测试模组',
       directoryPath: r'D:\Mod',
       repositoryUrl: 'https://example.com/mod.git',
+      repositorySubdirectory: '测试/PEAK_mod',
     );
 
     await store.save(config);
@@ -26,5 +27,28 @@ void main() {
     expect(await store.load(), isNotNull);
     expect((await store.load())!.toJson(), config.toJson());
     expect(await file.readAsString(), isNot(contains('token')));
+  });
+
+  test('读取旧配置时缺少仓库内 Mod 目录仍保持空值', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'gitmod-legacy-config-test-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final file = File('${directory.path}${Platform.pathSeparator}config.json');
+    await file.writeAsString(
+      jsonEncode(<String, Object>{
+        'role': 'player',
+        'name': '旧 Mod',
+        'directoryPath': r'D:\InstalledMods\Old',
+        'repositoryUrl': 'https://example.com/old.git',
+      }),
+      encoding: utf8,
+    );
+
+    final loaded = await JsonAppConfigStore(file).load();
+
+    expect(loaded, isNotNull);
+    expect(loaded!.repositorySubdirectory, isEmpty);
+    expect(loaded.toJson(), containsPair('repositorySubdirectory', ''));
   });
 }
